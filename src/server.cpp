@@ -6,8 +6,10 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <thread>
 
-Server::Server(int port) : port(port), server_fd(-1) {
+Server::Server(int port, size_t num_threads) 
+    : port(port), server_fd(-1), thread_pool(num_threads) {
     // zero out the sockaddr struct so no garbage values mess us up
     std::memset(&address, 0, sizeof(address));
     address.sin_family = AF_INET; // ipv4
@@ -44,7 +46,7 @@ void Server::start() {
     }
 
     // 4. put the socket in passive listening mode, with a small backlog queue
-    if (listen(server_fd, 10) < 0) {
+    if (listen(server_fd, 128) < 0) {
         std::cerr << "error: listen failed\n";
         close(server_fd);
         server_fd = -1;
@@ -52,9 +54,9 @@ void Server::start() {
     }
 
     std::cout << "🚀 server is listening on http://localhost:" << port << "\n";
-    std::cout << "waiting for incoming connections (single-threaded mode)...\n\n";
+    std::cout << "ready to handle concurrent requests via thread pool!\n\n";
 
-    // 5. main server loop - currently blocking & single threaded for phase 1
+    // 5. main server loop - accept connections and delegate to worker pool
     while (true) {
         struct sockaddr_in client_addr;
         socklen_t client_len = sizeof(client_addr);
@@ -68,10 +70,14 @@ void Server::start() {
 
         char client_ip[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, sizeof(client_ip));
-        std::cout << "--> new connection accepted from " << client_ip << ":" << ntohs(client_addr.sin_port) << "\n";
+        std::cout << "--> [main thread] accepted connection from " << client_ip 
+                  << ":" << ntohs(client_addr.sin_port) 
+                  << " (socket fd: " << client_fd << ")\n";
 
-        // handle the request directly (blocks everything else right now)
-        handle_client(client_fd);
+        // instead of blocking here, we push the client handling job into our thread pool queue
+        thread_pool.enqueue([this, client_fd]() {
+            handle_client(client_fd);
+        });
     }
 }
 
@@ -82,23 +88,24 @@ void Server::handle_client(int client_fd) {
     // read raw bytes from client socket
     ssize_t bytes_read = read(client_fd, buffer, sizeof(buffer) - 1);
     if (bytes_read < 0) {
-        std::cerr << "error reading from client socket\n";
+        std::cerr << "error reading from client socket " << client_fd << "\n";
         close(client_fd);
         return;
     }
 
-    std::cout << "--- Raw HTTP Request (" << bytes_read << " bytes) ---\n";
+    std::cout << "--- [worker thread " << std::this_thread::get_id() 
+              << "] Raw HTTP Request (" << bytes_read << " bytes) ---\n";
     std::cout << buffer << "\n";
-    std::cout << "----------------------------------------------\n";
+    std::cout << "--------------------------------------------------------\n";
 
-    // prepare a simple hardcoded html response body
+    // prepare a simple html response body showing concurrent handling
     std::string html_body = 
         "<!DOCTYPE html>\n"
         "<html>\n"
         "<head><title>Custom C++ Web Server</title></head>\n"
         "<body style='font-family: sans-serif; text-align: center; padding-top: 50px;'>\n"
-        "  <h1>Hey! It works! 🎉</h1>\n"
-        "  <p>This is served from our custom single-threaded C++ HTTP/1.1 server.</p>\n"
+        "  <h1>Hey! It works concurrently! 🚀</h1>\n"
+        "  <p>This request was processed asynchronously by a worker thread in our ThreadPool.</p>\n"
         "</body>\n"
         "</html>\n";
 
@@ -111,13 +118,14 @@ void Server::handle_client(int client_fd) {
         "\r\n" + 
         html_body;
 
-    // send response back to browser/curl
+    // send response back to client
     ssize_t bytes_sent = send(client_fd, response.c_str(), response.length(), 0);
     if (bytes_sent < 0) {
-        std::cerr << "failed to send response to client\n";
+        std::cerr << "failed to send response to client socket " << client_fd << "\n";
     }
 
-    // close connection for phase 1 (no keep-alive yet)
+    // close client connection when done
     close(client_fd);
-    std::cout << "<-- response sent & connection closed\n\n";
+    std::cout << "<-- [worker thread " << std::this_thread::get_id() 
+              << "] response sent & client socket " << client_fd << " closed\n\n";
 }

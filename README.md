@@ -6,13 +6,13 @@ This project is built to deeply understand low-level network programming, the so
 
 ---
 
-## 🛠️ Current Status (Phase 1)
+## 🛠️ Current Status (Phase 2)
 
 - [x] Basic POSIX TCP socket creation (`socket`, `bind`, `listen`, `accept`)
-- [x] Single-threaded blocking request handling
-- [x] Raw HTTP request logging to console
+- [x] Multithreaded request handling using a custom C++ `ThreadPool`
+- [x] Thread-safe task queue with `std::mutex` and `std::condition_variable`
+- [x] Raw HTTP request logging tagged with worker thread IDs
 - [x] Basic HTTP/1.1 200 OK HTML response generation
-- [ ] Multithreading / Thread pool (Phase 2)
 - [ ] Non-blocking I/O with Event Loop / Reactor pattern (`kqueue`/`epoll`) (Phase 3)
 - [ ] Full HTTP request parser (headers, query params, path routing)
 
@@ -21,8 +21,7 @@ This project is built to deeply understand low-level network programming, the so
 ## 🚀 Building and Running
 
 ### Prerequisites
-- CMake (>= 3.16)
-- C++17 compatible compiler (`clang++` or `g++`)
+- CMake (>= 3.16) or direct C++17 compiler (`clang++` / `g++`)
 
 ### Build Instructions
 
@@ -36,7 +35,7 @@ make
 **Option 2: Direct compilation (`clang++`)**
 ```bash
 mkdir -p build
-clang++ -std=c++17 -Iinclude src/main.cpp src/server.cpp -o build/http_server
+clang++ -std=c++17 -pthread -Iinclude src/main.cpp src/server.cpp src/thread_pool.cpp -o build/http_server
 ```
 
 ### Run the Server
