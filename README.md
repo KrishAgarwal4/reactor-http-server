@@ -1,52 +1,33 @@
-# Custom C++ HTTP/1.1 Server
+# BareMetal HTTP
 
-A custom HTTP/1.1 web server written in modern C++ from scratch using standard POSIX network sockets (`sys/socket.h`, `netinet/in.h`).
-
-This project is built to deeply understand low-level network programming, the socket API lifecycle, and HTTP protocol mechanics under the hood.
+A lightweight, zero-dependency HTTP/1.1 web server built entirely in C++17. Designed to bypass bloated web frameworks, BareMetal interfaces directly with the OS network stack via raw POSIX sockets, making it ideal for resource-constrained embedded systems and IoT devices.
 
 ---
 
-## 🛠️ Current Status (Phase 2)
+## Core Architecture & Features
 
-- [x] Basic POSIX TCP socket creation (`socket`, `bind`, `listen`, `accept`)
-- [x] Multithreaded request handling using a custom C++ `ThreadPool`
-- [x] Thread-safe task queue with `std::mutex` and `std::condition_variable`
-- [x] Raw HTTP request logging tagged with worker thread IDs
-- [x] Basic HTTP/1.1 200 OK HTML response generation
-- [ ] Non-blocking I/O with Event Loop / Reactor pattern (`kqueue`/`epoll`) (Phase 3)
-- [ ] Full HTTP request parser (headers, query params, path routing)
+* **Raw POSIX Sockets:** Direct `sys/socket.h` and `netinet/in.h` memory and connection management without heavy external dependencies (no Boost, no POCO).
+* **Custom Concurrency Engine:** Utilizes a custom C++ Thread Pool (`std::mutex`, `std::condition_variable`) to handle concurrent client connections efficiently, avoiding the massive CPU overhead of per-request thread allocation.
+* **Zero-Dependency HTTP Parser:** A custom string-parsing engine designed to decode raw TCP network buffers, extract HTTP methods, and map header key-value pairs natively.
+* **URI Router & File Serving:** Dynamically routes HTTP requests and streams static disk assets (HTML, text) directly to the client with accurate MIME typing and HTTP status codes.
 
 ---
 
-## 🚀 Building and Running
+## Project Structure
 
-### Prerequisites
-- CMake (>= 3.16) or direct C++17 compiler (`clang++` / `g++`)
-
-### Build Instructions
-
-**Option 1: Using CMake**
-```bash
-mkdir -p build && cd build
-cmake ..
-make
-```
-
-**Option 2: Direct compilation (`clang++`)**
-```bash
-mkdir -p build
-clang++ -std=c++17 -pthread -Iinclude src/main.cpp src/server.cpp src/thread_pool.cpp -o build/http_server
-```
-
-### Run the Server
-
-```bash
-./http_server
-```
-
-Once running, test it out with:
-- **Browser:** Open [http://localhost:8080](http://localhost:8080)
-- **cURL:**
-  ```bash
-  curl -v http://localhost:8080
-  ```
+```text
+reactor-http-server/
+├── CMakeLists.txt
+├── include/
+│   ├── server.hpp         # POSIX socket lifecycle (bind, listen, accept)
+│   ├── thread_pool.hpp    # Concurrency primitives and worker queue
+│   ├── http_request.hpp   # Raw buffer parsing and header extraction
+│   └── router.hpp         # URI mapping and static file serving
+├── src/
+│   ├── main.cpp           # Entry point (port 8080)
+│   ├── server.cpp         
+│   ├── thread_pool.cpp    
+│   ├── http_request.cpp   
+│   └── router.cpp         
+└── www/
+    └── index.html         # Test static asset
